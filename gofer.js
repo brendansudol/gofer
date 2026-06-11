@@ -358,7 +358,7 @@ export function validateProducts(arr) {
  * HTML→JSON goes through Claude (immune to selector rot); checkout does not.
  * ============================================================================= */
 
-export function cleanHtml(html, maxBytes = 150_000) {
+export function cleanHtml(html, maxBytes = 300_000) {
   const h = String(html)
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -430,6 +430,25 @@ export const amazon = {
       const shot = await screenshot(page, 'captcha');
       throw new GoferError('CAPTCHA', 'Amazon is showing a CAPTCHA — solve it in the Chrome window on the Mini, then /cancel and retry.', shot);
     }
+    // The full page runs ~1MB cleaned; truncating it from the top loses most of the
+    // result grid. Send only the per-product result blocks, which hold exactly the
+    // ASIN/title/price/rating markup the extractor needs.
+    const blocks = await page
+      .$$eval('div[data-component-type="s-search-result"]', (els) => {
+        const SPONSORED =
+          '.puis-sponsored-label-text, .s-sponsored-label-text, ' +
+          '[data-component-type="sp-sponsored-result"], a[aria-label*="Sponsored" i]';
+        const isAd = (el) => el.querySelector(SPONSORED) || /\bSponsored\b/.test(el.innerText);
+        const organic = els.filter((el) => !isAd(el));
+        // If somehow every result is an ad, keep them rather than return nothing —
+        // the extractor still tags sponsored:true and the ranker deprioritizes.
+        return (organic.length ? organic : els).slice(0, 20).map((el) => el.outerHTML);
+      })
+      .catch(() => []);
+    if (blocks.length) {
+      return blocks.map((b) => cleanHtml(b, 12_000)).join('\n');
+    }
+    log('warn', 'search_result_blocks_missed', { query });
     return cleanHtml(html);
   },
 };
