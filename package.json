@@ -1,0 +1,16 @@
+{
+  "name": "gofer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Text-to-buy agent for Amazon, driven over Telegram",
+  "main": "gofer.js",
+  "scripts": {
+    "start": "node gofer.js",
+    "login": "node gofer.js --login",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
